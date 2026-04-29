@@ -1,0 +1,71 @@
+name: Java CI with Maven and Jacoco
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repositorio
+      - uses: actions/checkout@v4
+
+      # 2. Configurar el entorno de Java
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # 3. Dar permisos de ejecución al Maven Wrapper
+      - name: Grant execute permission for mvnw
+        run: chmod +x mvnw
+
+      # 4. Compilar el proyecto
+      - name: Compile with Maven
+        run: ./mvnw compile --no-transfer-progress
+
+      # 5. Ejecutar tests de integración (verify)
+      # Usamos continue-on-error: true para que el reporte se genere incluso si fallan los tests
+      - name: Run Integration Tests
+        run: ./mvnw verify --no-transfer-progress
+
+      # 6. Generar Informe de Resultados (Test Reporter)
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always() # Se ejecuta aunque los tests fallen
+        with:
+          name: Maven Tests Report
+          path: target/surefire-reports/*.xml,target/failsafe-reports/*.xml
+          reporter: java-junit
+
+      # 7. Generar Badge de Cobertura con Jacoco
+      - name: Generate Jacoco Badge
+        id: jacoco
+        uses: cicirello/jacoco-badge-generator@v2
+        with:
+          generate-branches-badge: true
+          jacoco-csv-file: target/site/jacoco/jacoco.csv
+
+      # 8. Commit y Push del badge (para que sea dinámico en el README)
+      - name: Log coverage percentage
+        run: |
+          echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
+          echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
+
+      - name: Commit and push the badge (if it changed)
+        uses: EndBug/add-and-commit@v9
+        with:
+          default_author: github_actions
+          message: 'Update coverage badge'
+          add: '*.svg'
